@@ -10,7 +10,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
-
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -44,10 +43,10 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
 if not TOKEN:
-    raise RuntimeError("BOT_TOKEN not found in environment variables")
+    raise RuntimeError("BOT_TOKEN not found in .env file")
 
 if not ADMIN_ID:
-    raise RuntimeError("ADMIN_ID not found in environment variables")
+    raise RuntimeError("ADMIN_ID not found in .env file")
 
 ADMIN_ID = int(ADMIN_ID)
 
@@ -449,34 +448,40 @@ def download_media(url, folder):
     options = {
         "outtmpl": output_template,
 
+        # Prefer a combined file when available.
+        # Otherwise download separate video/audio
+        # and let FFmpeg merge them.
+        "format": "bv*+ba/b",
+
+        "merge_output_format": "mp4",
+
         "noplaylist": True,
 
-        "quiet": False,
+        "quiet": True,
 
         "no_warnings": False,
 
         "restrictfilenames": True,
 
-        "socket_timeout": 60,
+        "writethumbnail": False,
 
-        "retries": 5,
+        "socket_timeout": 30,
 
-        "fragment_retries": 5,
+        "retries": 3,
 
-        "merge_output_format": "mp4",
+        "fragment_retries": 3,
 
-        # Deno JavaScript runtime
+        "ignoreerrors": False,
+
+        # Deno JavaScript runtime for modern YouTube extraction.
         "js_runtimes": {
             "deno": {}
         },
 
-        # yt-dlp EJS support
+        # yt-dlp EJS support.
         "remote_components": {
             "ejs": ["github"]
         },
-
-        # Video first, then single-file fallback
-        "format": "b[ext=mp4]/b",
     }
 
     with yt_dlp.YoutubeDL(options) as ydl:
@@ -488,8 +493,7 @@ def download_media(url, folder):
 
         print(
             "Downloaded:",
-            info.get("title"),
-            info.get("ext")
+            info.get("title")
         )
 
         files = [
@@ -585,7 +589,7 @@ async def send_media_files(
                     await update.message.reply_video(
                         video=media,
                         caption=(
-                            f"✅ Downloaded successfully!\n\n"
+                            "✅ Downloaded successfully!\n\n"
                             f"{platform}"
                         ),
                         supports_streaming=True
@@ -606,12 +610,18 @@ async def send_media_files(
                     await update.message.reply_photo(
                         photo=media,
                         caption=(
-                            f"✅ Downloaded successfully!\n\n"
+                            "✅ Downloaded successfully!\n\n"
                             f"{platform}"
                         )
                     )
 
                 sent_count += 1
+
+            else:
+
+                print(
+                    f"Unsupported file type: {file_path}"
+                )
 
         except Exception as e:
 
@@ -680,7 +690,10 @@ async def handle_link(
 
     try:
 
+        # =========================
         # DOWNLOAD
+        # =========================
+
         with tempfile.TemporaryDirectory() as temp_folder:
 
             files = await asyncio.to_thread(
