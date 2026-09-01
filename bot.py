@@ -10,6 +10,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -43,10 +44,10 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
 if not TOKEN:
-    raise RuntimeError("BOT_TOKEN not found in .env file")
+    raise RuntimeError("BOT_TOKEN not found in environment variables")
 
 if not ADMIN_ID:
-    raise RuntimeError("ADMIN_ID not found in .env file")
+    raise RuntimeError("ADMIN_ID not found in environment variables")
 
 ADMIN_ID = int(ADMIN_ID)
 
@@ -448,40 +449,65 @@ def download_media(url, folder):
     options = {
         "outtmpl": output_template,
 
-        # Video sites: prefer MP4 video + M4A audio, then fall back
-        # to a single best file. Image based sites such as Pinterest
-        # will still return their best image format.
-        "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
-
-        "merge_output_format": "mp4",
-
         "noplaylist": True,
 
-        "quiet": True,
+        "quiet": False,
 
-        "no_warnings": True,
+        "no_warnings": False,
 
         "restrictfilenames": True,
 
-        "writethumbnail": False,
+        "socket_timeout": 60,
 
-        # Helps sites that return modern web formats.
-        "socket_timeout": 30,
+        "retries": 5,
 
-        "retries": 3,
+        "fragment_retries": 5,
+
+        "merge_output_format": "mp4",
+
+        # Deno JavaScript runtime
+        "js_runtimes": {
+            "deno": {}
+        },
+
+        # yt-dlp EJS support
+        "remote_components": {
+            "ejs": ["github"]
+        },
+
+        # Video first, then single-file fallback
+        "format": (
+            "bv*[ext=mp4]+ba[ext=m4a]/"
+            "bv*+ba/"
+            "b[ext=mp4]/"
+            "b"
+        ),
     }
 
     with yt_dlp.YoutubeDL(options) as ydl:
 
-        ydl.extract_info(
+        info = ydl.extract_info(
             url,
             download=True
         )
 
+        print(
+            "Downloaded:",
+            info.get("title"),
+            info.get("ext")
+        )
+
         files = [
             p for p in Path(folder).iterdir()
-            if p.is_file() and p.suffix.lower() not in {
-                ".part", ".ytdl", ".json", ".description", ".vtt", ".srt", ".ass"
+            if p.is_file()
+            and p.suffix.lower() not in {
+                ".part",
+                ".ytdl",
+                ".json",
+                ".description",
+                ".vtt",
+                ".srt",
+                ".ass"
             }
         ]
 
@@ -613,7 +639,7 @@ async def handle_link(
 
     user = update.effective_user
 
-    # Admin action
+    # ADMIN ACTION
     if (
         is_admin(user.id)
         and context.user_data.get("waiting_for")
@@ -626,7 +652,7 @@ async def handle_link(
 
         return
 
-    # Permission
+    # PERMISSION
     if not is_allowed(user.id):
 
         await update.message.reply_text(
@@ -638,7 +664,7 @@ async def handle_link(
 
     url = update.message.text.strip()
 
-    # URL check
+    # URL CHECK
     if not (
         url.startswith("http://")
         or url.startswith("https://")
@@ -659,10 +685,7 @@ async def handle_link(
 
     try:
 
-        # =========================
         # DOWNLOAD
-        # =========================
-
         with tempfile.TemporaryDirectory() as temp_folder:
 
             files = await asyncio.to_thread(
@@ -712,6 +735,7 @@ async def handle_link(
         )
 
         try:
+
             await processing_message.edit_text(
                 "❌ Download failed.\n\n"
                 "The link may be private, "
