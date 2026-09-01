@@ -476,12 +476,7 @@ def download_media(url, folder):
         },
 
         # Video first, then single-file fallback
-        "format": (
-            "bv*[ext=mp4]+ba[ext=m4a]/"
-            "bv*+ba/"
-            "b[ext=mp4]/"
-            "b"
-        ),
+        "format": "b[ext=mp4]/b",
     }
 
     with yt_dlp.YoutubeDL(options) as ydl:
