@@ -448,7 +448,12 @@ def download_media(url, folder):
     options = {
         "outtmpl": output_template,
 
-        "format": "best[ext=mp4]/best",
+        # Video sites: prefer MP4 video + M4A audio, then fall back
+        # to a single best file. Image based sites such as Pinterest
+        # will still return their best image format.
+        "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+
+        "merge_output_format": "mp4",
 
         "noplaylist": True,
 
@@ -459,25 +464,28 @@ def download_media(url, folder):
         "restrictfilenames": True,
 
         "writethumbnail": False,
+
+        # Helps sites that return modern web formats.
+        "socket_timeout": 30,
+
+        "retries": 3,
     }
 
     with yt_dlp.YoutubeDL(options) as ydl:
 
-        info = ydl.extract_info(
+        ydl.extract_info(
             url,
             download=True
         )
 
         files = [
             p for p in Path(folder).iterdir()
-            if p.is_file()
+            if p.is_file() and p.suffix.lower() not in {
+                ".part", ".ytdl", ".json", ".description", ".vtt", ".srt", ".ass"
+            }
         ]
 
-        if files:
-
-            return files
-
-        return []
+        return files
 
 
 # =========================
@@ -497,7 +505,11 @@ def detect_platform(url):
     ):
         return "▶️ YouTube"
 
-    if "tiktok.com" in url_lower:
+    if (
+        "tiktok.com" in url_lower
+        or "vm.tiktok.com" in url_lower
+        or "vt.tiktok.com" in url_lower
+    ):
         return "🎵 TikTok"
 
     if (
